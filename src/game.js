@@ -62,8 +62,8 @@ function bestOf7(cards) {
 }
 
 // ─── GAME ENGINE ─────────────────────────────────────────────────────────────
-const SMALL_BLIND = 25;
-const BIG_BLIND = 50;
+const DEFAULT_SMALL_BLIND = 25;
+const DEFAULT_BIG_BLIND = 50;
 const STARTING_CHIPS = 1500;
 
 class PokerGame {
@@ -78,15 +78,18 @@ class PokerGame {
     this.dealerIndex = -1;
     this.currentIndex = -1;
     this.callAmount = 0;
-    this.minRaise = BIG_BLIND;
+    this.minRaise = this.BIG_BLIND;
     this.actedThisRound = new Set();
     this.roundBets = {};
     this.log = [];
     this.handNumber = 0;
     this.lastAction = null;
+    this.SMALL_BLIND = DEFAULT_SMALL_BLIND;
+    this.BIG_BLIND = DEFAULT_BIG_BLIND;
+    this.defaultStack = 1500;
   }
 
-  addPlayer(id, name) {
+  addPlayer(id, name, startingStack, emoji) {
     // If player exists but is disconnected, just reconnect them
     const existing = this.players.find(p => p.id === id);
     if (existing) {
@@ -100,13 +103,15 @@ class PokerGame {
     if (this.players.length >= 9) return { error: 'Table is full' };
     const player = {
       id, name,
-      chips: STARTING_CHIPS,
+      chips: startingStack || this.defaultStack || 1500,
       hand: [],
       bet: 0,
       folded: false,
       allIn: false,
       sitOut: false,
       connected: true,
+      buyIns: 1,
+      emoji: emoji || '🎭',
       seatIndex: this.players.length
     };
     this.players.push(player);
@@ -122,7 +127,7 @@ class PokerGame {
     }
   }
 
-  reconnectPlayer(id) {
+  reconnectPlayer(id, emoji) {
     const p = this.players.find(p => p.id === id);
     if (p) { p.connected = true; this.addLog(`${p.name} reconnected.`); }
   }
@@ -139,17 +144,20 @@ class PokerGame {
     return this.players.filter(p => !p.folded && p.hand.length === 2);
   }
 
-  startHand() {
+  startHand(settings = {}) {
     const active = this.activePlayers();
     if (active.length < 2) return { error: 'Need at least 2 players' };
 
     this.handNumber++;
+    // Apply settings if provided
+    if (settings.smallBlind) this.SMALL_BLIND = settings.smallBlind;
+    if (settings.bigBlind)   this.BIG_BLIND   = settings.bigBlind;
     this.deck = newDeck();
     this.community = [];
     this.pot = 0;
     this.sidePots = [];
-    this.callAmount = BIG_BLIND;
-    this.minRaise = BIG_BLIND;
+    this.callAmount = this.BIG_BLIND;
+    this.minRaise = this.BIG_BLIND;
     this.actedThisRound = new Set();
     this.roundBets = {};
     this.lastAction = null;
@@ -173,14 +181,14 @@ class PokerGame {
     // Blinds
     const sbIdx = this.nextActiveIndex(this.dealerIndex, 1);
     const bbIdx = this.nextActiveIndex(sbIdx, 1);
-    this.postBlind(sbIdx, SMALL_BLIND, 'SB');
-    this.postBlind(bbIdx, BIG_BLIND, 'BB');
+    this.postBlind(sbIdx, this.SMALL_BLIND, 'SB');
+    this.postBlind(bbIdx, this.BIG_BLIND, 'BB');
 
     this.phase = 'preflop';
     this.currentIndex = this.nextActiveIndex(bbIdx, 1);
     this.addLog(`--- Hand #${this.handNumber} --- Dealer: ${this.players[this.dealerIndex].name}`);
-    this.addLog(`${this.players[sbIdx].name} posts $${SMALL_BLIND} (SB)`);
-    this.addLog(`${this.players[bbIdx].name} posts $${BIG_BLIND} (BB)`);
+    this.addLog(`${this.players[sbIdx].name} posts $${this.SMALL_BLIND} (SB)`);
+    this.addLog(`${this.players[bbIdx].name} posts $${this.BIG_BLIND} (BB)`);
 
     return { success: true };
   }
@@ -315,7 +323,7 @@ class PokerGame {
     // Reset for next street
     for (const p of this.players) p.bet = 0;
     this.callAmount = 0;
-    this.minRaise = BIG_BLIND;
+    this.minRaise = this.BIG_BLIND;
     this.actedThisRound.clear();
     this.roundBets = {};
 
@@ -402,6 +410,8 @@ class PokerGame {
         connected: p.connected,
         seatIndex: p.seatIndex,
         cardCount: p.hand.length,
+        buyIns: p.buyIns || 1,
+        emoji: p.emoji || '🎭',
         // Only reveal hand to the player themselves (or on showdown)
         hand: (p.id === playerId || this.phase === 'showdown') ? p.hand : null
       })),
