@@ -133,7 +133,7 @@ class PokerGame {
   }
 
   canStart() {
-    return this.activePlayers().length >= 2 && this.phase === 'waiting';
+    return this.activePlayers().length >= 2 && (this.phase === 'waiting' || this.phase === 'showdown');
   }
 
   activePlayers() {
@@ -379,7 +379,7 @@ class PokerGame {
     }));
 
     this.pot = 0;
-    this.phase = 'waiting';
+    // Keep phase='showdown' so broadcastState reveals cards. Resets in startHand().
 
     return { advance: 'showdown', winners: winnerInfo };
   }
